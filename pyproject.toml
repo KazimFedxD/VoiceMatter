@@ -1,0 +1,6 @@
+[project]
+name = "voicematter"
+version = "0.1.0"
+description = "Press-to-record voice dictation agent that transcribes audio and uses an LLM to format the output (drops mid-stream corrections, fixes grammar, restructures into clean lists/paragraphs)."
+requires-python = ">=3.11"
+dependencies = []

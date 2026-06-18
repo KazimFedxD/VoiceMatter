@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: VoiceMatter README
+    url: https://github.com/FedxD/VoiceMatter/blob/master/README.md
+    about: Start here — what VoiceMatter is, how the pipeline works, and what's planned.
+  - name: Discussions
+    url: https://github.com/FedxD/VoiceMatter/discussions
+    about: For questions, ideas, and "how do I..." that aren't bug reports or feature requests.
+  - name: Cleanup prompt source
+    url: https://github.com/FedxD/VoiceMatter/blob/master/VoiceMatter/prompts
+    about: The system prompt that drives the LLM cleanup step — read this before filing a cleanup-quality report.

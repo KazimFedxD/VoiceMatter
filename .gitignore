@@ -8,3 +8,8 @@ wheels/
 
 # Virtual environments
 .venv
+.env
+
+uv.lock
+sample-audio-2026-06-17.mp3
+.claude

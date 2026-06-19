@@ -13,3 +13,4 @@ wheels/
 uv.lock
 sample-audio-2026-06-17.mp3
 .claude
+test.py

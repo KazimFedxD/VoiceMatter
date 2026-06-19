@@ -6,9 +6,13 @@ import json
 
 from enum import Enum
 
+from io import BytesIO
+import soundfile as sf
+
 from helper import debug
 
 from .transcriber import Transcriber
+from .recorder import Recorder
 
 SOCKET_PATH = "/tmp/voicematter.sock"
 
@@ -20,7 +24,7 @@ class State(Enum):
 class VoiceMatterDaemon:
     def __init__(self):
         self.state = State.IDLE
-        self.recorder = None
+        self.recorder = Recorder()
         self.transcriber = Transcriber()
         self.processor = None
         self.server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -58,20 +62,39 @@ class VoiceMatterDaemon:
         debug(f"Current state: {self.state}")
         if self.state == State.IDLE:
             self.state = State.RECORDING
+            self.recorder.start_recording()
             debug("Recording started.")
         elif self.state == State.RECORDING:
             self.state = State.PROCESSING
             debug("Recording stopped. Processing audio...")
-            transcription = self.transcriber.transcribe("sample-audio-2026-06-17.mp3")
-            debug(f"Transcription result: {transcription}")
+            self.process_audio()
         elif self.state == State.PROCESSING:
             debug("Currently processing. Cannot trigger recording.")
         
     def handle_pause(self):
         debug(f"Current state: {self.state}")
         if self.state == State.RECORDING:
-            debug("Paused or Unpaused | NOT IMPLEMENTED")
-        
+            self.recorder.pause_recording()
+            debug("Recording paused.")
+    
+    def process_audio(self):
+        audio_data = self.recorder.stop_recording()
+        buffer = BytesIO()
+
+        sf.write(
+            buffer,
+            audio_data,
+            self.recorder.samplerate,
+            format="WAV"
+        )
+
+        buffer.seek(0)
+        transcription = self.transcriber.transcribe(buffer.read()
+                                                    )
+        print(f"Transcription: {transcription}")
+        self.state = State.IDLE
+
+    
 if __name__ == "__main__":
     daemon = VoiceMatterDaemon()
     daemon.start_daemon()

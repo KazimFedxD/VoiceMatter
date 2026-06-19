@@ -11,10 +11,8 @@ class Transcriber:
     def __init__(self):
         self.client = DeepgramClient(api_key=os.getenv("DEEPGRAM_API_KEY"))
     
-    def transcribe(self, path: str) -> str | None: # change to bytes in the future directly from captured audio
+    def transcribe(self, audio_data: bytes) -> str | None: # change to bytes in the future directly from captured audio
         try:
-            with open(path, "rb") as f:
-                audio_data = f.read()
                 
             response = self.client.listen.v1.media.transcribe_file(
                 request=audio_data,
@@ -30,5 +28,5 @@ class Transcriber:
                 print("No transcript found in response.")
                 return None
         except Exception as e:
-            print(f"Error during STT transcription: {e}")
+            print(f"Error during STT transcription")
             return None

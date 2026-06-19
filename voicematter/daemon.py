@@ -47,6 +47,8 @@ class VoiceMatterDaemon:
         self._subscribers: list[socket.socket] = []
         self._subscribers_lock = threading.Lock()
         self._processing_lock = threading.Lock()
+        self._cancel_requested: bool = False
+        self._shutdown_event = threading.Event()
 
         self.setup_daemon()
 
@@ -105,13 +107,15 @@ class VoiceMatterDaemon:
             # One-shot command path (existing CLI behavior).
             if action == "stop":
                 debug("Stopping daemon...")
-                os._exit(0)
+                self._request_shutdown()
             elif action == "trigger":
                 self.handle_trigger()
             elif action == "pause":
                 self.handle_pause()
             elif action == "resume":
                 self.handle_resume()
+            elif action == "cancel":
+                self.handle_cancel()
             elif action == "copy":
                 self.handle_copy()
             else:
@@ -152,13 +156,15 @@ class VoiceMatterDaemon:
                         self.handle_pause()
                     elif action == "resume":
                         self.handle_resume()
+                    elif action == "cancel":
+                        self.handle_cancel()
                     elif action == "copy":
                         self.handle_copy()
                     elif action == "trigger":
                         self.handle_trigger()
                     elif action == "stop":
                         debug("Stopping daemon...")
-                        os._exit(0)
+                        self._request_shutdown()
         except OSError:
             pass
         finally:
@@ -177,7 +183,16 @@ class VoiceMatterDaemon:
         if self.state == State.IDLE:
             self.state = State.RECORDING
             self.emit("state", state=self.state.value)
-            self.recorder.start_recording()
+            try:
+                self.recorder.start_recording()
+            except Exception as e:
+                # Audio failed to start (e.g. bad device/channel config). Roll back
+                # to IDLE so subsequent commands still work and stay subscribed.
+                debug(f"start_recording failed: {e}")
+                self.state = State.IDLE
+                self.emit("state", state=self.state.value)
+                self.emit("error", message=f"Recording failed to start: {e}")
+                return
             self._start_level_emitter()
             debug("Recording started.")
         elif self.state == State.RECORDING or self.state == State.PAUSED:
@@ -189,12 +204,18 @@ class VoiceMatterDaemon:
             debug("Currently processing. Cannot trigger recording.")
 
     def handle_pause(self):
-        debug(f"Current state: {self.state}")
+        """Toggle pause on the active recording. RECORDING ↔ PAUSED."""
+        debug(f"Pause toggle. Current state: {self.state}")
         if self.state == State.RECORDING:
             self.recorder.pause()
             self.state = State.PAUSED
             self.emit("state", state=self.state.value)
             debug("Recording paused.")
+        elif self.state == State.PAUSED:
+            self.recorder.resume()
+            self.state = State.RECORDING
+            self.emit("state", state=self.state.value)
+            debug("Recording resumed.")
 
     def handle_resume(self):
         debug(f"Current state: {self.state}")
@@ -212,6 +233,41 @@ class VoiceMatterDaemon:
         else:
             debug("handle_copy called with no buffered transcription.")
 
+    def handle_cancel(self):
+        """Drop in-flight audio and return to idle. Used by compositor-bound Esc."""
+        debug(f"Cancel requested. Current state: {self.state}")
+        if self.state == State.IDLE:
+            return
+        if self.state in (State.RECORDING, State.PAUSED):
+            try:
+                self.recorder.stop_recording()
+            except Exception as e:
+                debug(f"stop_recording during cancel raised: {e}")
+            self.state = State.IDLE
+            self.emit("state", state=self.state.value)
+        elif self.state == State.PROCESSING:
+            # Soft cancel: flag is checked between processing steps.
+            self._cancel_requested = True
+
+    def _request_shutdown(self):
+        """Emit shutdown, ask Qt to quit, fall back to hard exit after 500ms."""
+        debug("Shutdown requested.")
+        self._shutdown_event.set()
+        try:
+            self.emit("shutdown")
+        except Exception as e:
+            debug(f"emit shutdown raised: {e}")
+        # Try graceful Qt shutdown if running in the same process.
+        try:
+            from PySide6.QtWidgets import QApplication
+            app = QApplication.instance()
+            if app is not None:
+                app.quit()
+        except Exception:
+            pass
+        # Fall back to hard exit after a grace period.
+        threading.Timer(0.5, os._exit, args=[0]).start()
+
     # ---------- audio level emitter ----------
 
     def _start_level_emitter(self):
@@ -224,37 +280,71 @@ class VoiceMatterDaemon:
     # ---------- processing pipeline ----------
 
     def process_audio(self):
+        self._cancel_requested = False
         with self._processing_lock:
             try:
                 audio_data = self.recorder.stop_recording()
+                if self._cancel_requested:
+                    self._cancel_to_idle()
+                    return
+
                 buffer = BytesIO()
                 sf.write(buffer, audio_data, self.recorder.samplerate, format="WAV")
                 buffer.seek(0)
+
+                self.emit("step", name="transcribe", status="started")
                 transcription = self.transcriber.transcribe(buffer.read())
-                print(f"Transcription: {transcription}")
+                self.emit("step", name="transcribe", status="done")
+                if self._cancel_requested:
+                    self._cancel_to_idle()
+                    return
 
                 if not transcription:
                     debug("No transcription received.")
                     self.last_transcription = None
-                    self.state = State.IDLE
-                    self.emit("state", state=self.state.value)
-                    self.emit("error", message="No transcription received")
+                    self._emit_error_idle("No transcription received")
                     return
 
                 self.last_transcription = transcription
+                print(f"Transcription: {transcription}")
+
+                self.emit("step", name="format", status="started")
                 formatted_text = self.formatter.format(transcription)
+                self.emit("step", name="format", status="done")
+                if self._cancel_requested:
+                    self._cancel_to_idle()
+                    return
                 print(f"Formatted Text: {formatted_text}")
 
-                self.writer.write(formatted_text)
+                self.emit("step", name="copy", status="started")
+                self.writer.copy(formatted_text)
+                self.emit("step", name="copy", status="done")
+                if self._cancel_requested:
+                    self._cancel_to_idle()
+                    return
+
+                self.emit("step", name="insert", status="started")
+                self.writer.paste()
+                self.emit("step", name="insert", status="done")
 
                 self.state = State.IDLE
                 self.emit("state", state=self.state.value)
                 self.emit("ready", text=formatted_text)
             except Exception as e:
                 debug(f"Processing failed: {e}")
-                self.state = State.IDLE
-                self.emit("state", state=self.state.value)
-                self.emit("error", message=str(e))
+                self._emit_error_idle(str(e))
+
+    def _cancel_to_idle(self):
+        """Used by process_audio when cancel is requested between steps."""
+        self.state = State.IDLE
+        self.emit("state", state=self.state.value)
+        self.emit("error", message="Cancelled")
+
+    def _emit_error_idle(self, msg: str):
+        """Common path: go to idle and surface an error to the overlay."""
+        self.state = State.IDLE
+        self.emit("state", state=self.state.value)
+        self.emit("error", message=msg)
 
 
 if __name__ == "__main__":

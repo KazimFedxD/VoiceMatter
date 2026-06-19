@@ -8,6 +8,10 @@ This document extracts every state shown in the design mockup, plus the state th
 codebase models that the mockup doesn't render (error). Use it as the single
 source of truth for visual / behavioral changes to the overlay.
 
+**Note:** the PNG mockup is the visual source of truth and supersedes this
+prose wherever they disagree. In particular, the pill height in the mockup is
+taller than 64 px — see §2 (Container) below.
+
 ---
 
 ## 1. Design Philosophy (tagline from mockup)
@@ -32,14 +36,26 @@ of them, it doesn't ship.
 | Property            | Value                                                                  |
 | ------------------- | ---------------------------------------------------------------------- |
 | Shape               | Rounded pill (corner radius 22 px)                                     |
-| Width × Height      | 280 × 64 px                                                            |
+| Width               | 280 px (fixed)                                                         |
+| Height              | Auto-grows per state (see table below)                                 |
 | Background fill     | `#111827` at 235/255 alpha (gray-900, near-opaque)                     |
 | Border              | 1 px white at 30/255 alpha (subtle, 1 px inset)                        |
-| Position            | Lower-middle of primary screen, ~62% down the screen height            |
-| Layout              | Horizontal: mic icon (40 × 40, left) + 12 px gap + action button (flex) |
+| Position            | Bottom-middle of primary screen, ~64 px above the bottom edge of `availableGeometry()` |
+| Layout              | Horizontal: mic icon (40 × 40, left) + 12 px gap + content column (flex: title+timer row, content row, subtitle, helper, button row) |
 | Window flags        | `FramelessWindowHint | WindowStaysOnTopHint | Tool`                   |
 | Background          | Translucent (`WA_TranslucentBackground`), pill drawn manually in `paintEvent` |
 | Drop shadow         | None (per "minimal" — system-drawn shadows are not used)               |
+
+**Per-state height** (the pill is 280 px wide and grows vertically):
+
+| State        | Height | Notes                                                   |
+| ------------ | ------ | ------------------------------------------------------- |
+| `recording`  | 104 px | Title + timer row, audio bars, subtitle, 3 buttons      |
+| `paused`     | 104 px | Same shape as recording; amber instead of red           |
+| `processing` | 132 px | Taller to fit 4-row checklist                           |
+| `ready`      | 112 px | Adds a 2 px progress bar + helper line                   |
+| `error`      | 96 px  | Title + error message + single Dismiss button            |
+| `idle`       | n/a    | Hidden (no window shown)                                |
 
 The pill is **transparent outside its rounded rect** so it never looks like a
 squared floating window on busy backgrounds.

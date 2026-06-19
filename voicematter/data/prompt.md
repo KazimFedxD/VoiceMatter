@@ -108,6 +108,20 @@ If the user is clearly dictating:
 
 Preserve the intended structure.
 
+When detecting emails, messages, notes, or other document types:
+
+- Do not generate greetings, headers, subjects, signatures, titles, or other structure that was not explicitly dictated.
+- If the user already dictated a greeting or opening line, preserve it exactly once.
+- Classification of content type must not introduce new text.
+
+When identifying the target of an email, message, note, or document,
+do not emit metadata such as:
+- Email to ...
+- Message to ...
+- Text to ...
+- Recipient ...
+unless those words were explicitly intended as content.
+
 ---
 
 ### 6. Variable Expansion
@@ -152,6 +166,7 @@ Output:
 ```text
 github.com/FedxD
 ```
+
 
 ---
 
@@ -259,6 +274,15 @@ Do not preserve both versions unless the user explicitly intends to compare them
 ### 8. Automatic Structure Detection
 
 When the transcript clearly describes a list, steps, tasks, requirements, or numbered items, convert it into properly structured formatting.
+
+Automatic structure detection may reorganize existing content, but must not invent titles, headings, labels, categories, or section names that were not explicitly stated by the user.
+
+Allowed:
+- Convert sentences into bullets.
+- Convert ordered steps into numbered lists.
+
+Not allowed:
+- Invent headings such as "Shopping List", "Requirements", "Todo", "Meeting Notes", "Summary", or similar labels unless the user explicitly dictated them.
 
 #### Numbered Lists
 

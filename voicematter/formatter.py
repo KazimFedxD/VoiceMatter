@@ -20,9 +20,24 @@ class Formatter:
     def __init__(self):
         self.client = Anthropic(api_key=API_KEY, base_url=BASE_URL)
         
-        self.system_messages = [
-            {"role": "system", "content": PROMPT},
-            {"role": "system", "content": f"Variables: {json.dumps(VARIABLES)}"}
-        ]
+        self.system_prompt = PROMPT + "\n\nVariables:\n" + json.dumps(VARIABLES)
+        
+    def format(self, text: str) -> str:
+        messages = [{"role": "user", "content": text}]
+        
+        response = self.client.messages.create(
+            model="MiniMax-M3",
+            max_tokens=10000,
+            system=self.system_prompt,
+            messages=messages,
+        )
+        
+        for block in response.content:
+            if block.type == "thinking":
+                print(f"Thinking: {block.text}")
+            elif block.type == "text":
+                return block.text.strip()
+        
+        
         
         

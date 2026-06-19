@@ -13,6 +13,7 @@ from helper import debug
 
 from .transcriber import Transcriber
 from .recorder import Recorder
+from .formatter import Formatter
 
 SOCKET_PATH = "/tmp/voicematter.sock"
 
@@ -26,7 +27,7 @@ class VoiceMatterDaemon:
         self.state = State.IDLE
         self.recorder = Recorder()
         self.transcriber = Transcriber()
-        self.processor = None
+        self.formatter = Formatter()
         self.server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     
         self.setup_daemon()
@@ -93,8 +94,14 @@ class VoiceMatterDaemon:
                                                     )
         print(f"Transcription: {transcription}")
         self.state = State.IDLE
+        
+        if not transcription:
+            debug("No transcription received. Returning to IDLE state.")
+            return
 
-    
+        formatted_text = self.formatter.format(transcription)
+        print(f"Formatted Text: {formatted_text}")
+
 if __name__ == "__main__":
     daemon = VoiceMatterDaemon()
     daemon.start_daemon()

@@ -19,8 +19,7 @@ from voicematter import VoiceMatter
 from voicematter.events import EventHandler
 from voicematter.overlay import main as overlay_main
 
-
-if __name__ == "__main__":
+def main():
     arg = sys.argv[1] if len(sys.argv) > 1 else None
 
     if arg == "daemon":
@@ -110,3 +109,5 @@ if __name__ == "__main__":
         )
     else:
         print(f"Unknown argument: {arg}")
+if __name__ == "__main__":
+    main()

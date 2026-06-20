@@ -12,3 +12,9 @@ dependencies = [
     "sounddevice>=0.5.5",
     "soundfile>=0.14.0",
 ]
+
+[project.scripts]
+voicematter = "voicematter.cli:main"
+
+[tool.setuptools]
+packages = ["voicematter"]

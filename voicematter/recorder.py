@@ -7,7 +7,7 @@ import numpy as np
 
 
 class Recorder:
-    def __init__(self, device: int = 0, channels: int = 1, samplerate: int = 44100):
+    def __init__(self, device, channels: int = 1, samplerate: int = 44100):
         self.device = device
         self.channels = channels
         self.samplerate = samplerate
@@ -21,6 +21,14 @@ class Recorder:
         self.stream: sd.InputStream | None = None
 
         self._log = logging.getLogger(__name__)
+
+    @staticmethod
+    def find_microphone() -> int:
+        for i, dev in enumerate(sd.query_devices()):
+            if "USB PnP Audio Device" in dev["name"]:
+                return i
+
+        raise RuntimeError("Microphone not found")
 
     def callback(self, indata, frames, time, status):
         # Always update level so the meter reflects silence too — keeps the UI alive.

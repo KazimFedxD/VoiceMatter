@@ -12,7 +12,7 @@ from typing import Any
 from io import BytesIO
 import soundfile as sf
 
-from helper import debug
+from voicematter.helper import debug
 
 from .transcriber import Transcriber
 from .recorder import Recorder
@@ -36,7 +36,7 @@ class VoiceMatterDaemon:
         self.state = State.IDLE
         self.last_transcription: str | None = None
 
-        self.recorder = Recorder()
+        self.recorder = Recorder(Recorder.find_microphone())
         self.transcriber = Transcriber()
         self.formatter = Formatter()
         self.writer = Writer()
